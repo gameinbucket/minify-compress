@@ -116,11 +116,15 @@ func write(file * os.File, data []byte) {
     file.Close()
 }
 
-func small(name string) {
-    original := get(name)
+func small(path string, name string, extension string, group * sync.WaitGroup) {
+    original := get(path + "/" + name + "." + extension)
     fmt.Print("original: " + string(original))
     mini := lib.MiniHTML(original)
     fmt.Print("mini: " + string(mini))
+    file := create(path + "/" + name + ".min." + extension)
+    file.Write(mini)
+    file.Close()
+    defer group.Done()
 }
 
 func main() {
@@ -129,6 +133,7 @@ func main() {
     // makeGIF("public/solaire-of-astora.png", "public/solaire-of-astora.gif")
  
     var group sync.WaitGroup
-    go small("../example/hello.html")
+    group.Add(1)
+    go small("../example", "app", "html", &group)
     group.Wait()
 }
