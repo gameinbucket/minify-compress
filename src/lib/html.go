@@ -4,6 +4,14 @@ import (
     "bytes"
 )
 
+/*
+Known bugs: some spaces are removed when they shouldn't be, for instance:
+    <td> Hello</td>
+    becomes
+    <td>Hello</td>
+    but should have remained as the original
+*/
+
 func MiniHTML(src []byte) ([]byte) {
     size := len(src)
     dest := make([]byte, size)
@@ -87,9 +95,9 @@ func MiniHTML(src []byte) ([]byte) {
                 case '>':
                 inTag = false
                 case '\n':
-                //continue
+                continue
                 case '\r':
-                //continue
+                continue
                 case '\t':
                 continue
                 case ' ':
