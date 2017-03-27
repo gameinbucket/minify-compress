@@ -3,6 +3,7 @@ package main
 import (
     "fmt"
     "sync"
+    "bytes"
     "os"
     "io"
     "io/ioutil"
@@ -20,22 +21,6 @@ import "./lib"
 func assert(e error) {
     if e != nil {
         panic(e)
-    }
-}
-
-func compressor(directory string) {
-    fmt.Println("directory " + directory)
-    info, err := ioutil.ReadDir(directory)
-    assert(err)
-    for _ , file := range info {
-        if file.IsDir() {
-            compressor(directory + "/" + file.Name())
-        } else {
-            extension := path.Ext(file.Name())
-            if extension == ".html" || extension == ".css" || extension == ".js" {
-                compress(directory + "/" + file.Name(), directory + "/" + file.Name() + ".gz")
-            }
-        }
     }
 }
 
@@ -116,24 +101,63 @@ func write(file * os.File, data []byte) {
     file.Close()
 }
 
-func small(path string, name string, extension string, group * sync.WaitGroup) {
-    original := get(path + "/" + name + "." + extension)
-    fmt.Print("original: " + string(original))
-    mini := lib.MiniHTML(original)
-    fmt.Print("mini: " + string(mini))
-    file := create(path + "/" + name + ".min." + extension)
-    file.Write(mini)
-    file.Close()
+func small(from string, name string, extension string, to string, group * sync.WaitGroup) {
+    if extension == ".html" {
+        original := get(from + "/" + name)
+        mini := lib.MiniHTML(original)
+        file := create(to + "/" + name)
+        file.Write(mini)
+        file.Close()
+        compress(to + "/" + name, to + "/" + name + ".gz")
+    } else if extension == ".css" {
+        original := get(from + "/" + name)
+        size := len(original)
+        dest := make([]byte, size)
+        j := 0
+        lib.MiniCSS(original, 0, size, dest, &j)
+        mini := bytes.TrimRight(dest, "\x00")
+        file := create(to + "/" + name)
+        file.Write(mini)
+        file.Close()
+        compress(to + "/" + name, to + "/" + name + ".gz")
+    } else if extension == ".js" {
+        original := get(from + "/" + name)
+        size := len(original)
+        dest := make([]byte, size)
+        j := 0
+        lib.MiniJS(original, 0, size, dest, &j)
+        mini := bytes.TrimRight(dest, "\x00")
+        file := create(to + "/" + name)
+        file.Write(mini)
+        file.Close()
+        compress(to + "/" + name, to + "/" + name + ".gz")
+    } else if extension == ".png" {
+        makeJPEG(from + "/" + name, to + "/" + name[:len(name)-4] + ".jpg")
+    }
     defer group.Done()
 }
 
+func reduce(from string, to string, group * sync.WaitGroup) {
+    fmt.Println(from)
+    if _ , err := os.Stat(to); os.IsNotExist(err) {
+        os.Mkdir(to, os.ModePerm)
+    }
+    info, err := ioutil.ReadDir(from)
+    assert(err)
+    for _ , file := range info {
+        name := file.Name()
+        if file.IsDir() {
+            reduce(from + "/" + name, to + "/" + name, group)
+        } else {
+            extension := path.Ext(name)
+            group.Add(1)
+            go small(from, name, extension, to, group)
+        }
+    }
+}
+
 func main() {
-    // compressor("public")
-    // makeJPEG("public/solaire-of-astora.png", "public/solaire-of-astora.jpg")
-    // makeGIF("public/solaire-of-astora.png", "public/solaire-of-astora.gif")
- 
     var group sync.WaitGroup
-    group.Add(1)
-    go small("../example", "app", "html", &group)
+    reduce("raw", "public", &group)
     group.Wait()
 }
